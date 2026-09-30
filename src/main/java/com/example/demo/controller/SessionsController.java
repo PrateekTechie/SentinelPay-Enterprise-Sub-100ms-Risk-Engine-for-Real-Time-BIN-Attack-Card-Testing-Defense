@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/sessions")
@@ -43,6 +44,68 @@ public class SessionsController {
         }
         Sessions savedSession = sessionsRepository.save(session);
         return new ResponseEntity<>(savedSession, HttpStatus.CREATED);
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Replace/Update full session", description = "Replaces all details of an existing session record")
+    public ResponseEntity<Sessions> updateSession(
+            @PathVariable("id") Long id, 
+            @Valid @RequestBody Sessions updatedSessionDetails) {
+
+        return sessionsRepository.findById(id)
+                .map(existingSession -> {
+                    existingSession.setAccount(updatedSessionDetails.getAccount());
+                    existingSession.setDeviceFingerprint(updatedSessionDetails.getDeviceFingerprint());
+                    existingSession.setIpAddress(updatedSessionDetails.getIpAddress());
+                    existingSession.setIsVpnProxy(updatedSessionDetails.getIsVpnProxy());
+                    existingSession.setAsnDatacenterFlag(updatedSessionDetails.getAsnDatacenterFlag());
+                    existingSession.setGeoCountry(updatedSessionDetails.getGeoCountry());
+                    existingSession.setUserAgent(updatedSessionDetails.getUserAgent());
+
+                    Sessions saved = sessionsRepository.save(existingSession);
+                    return ResponseEntity.ok(saved);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PatchMapping("/{id}")
+    @Operation(summary = "Partially update session fields", description = "Updates device, network, and location details of a session")
+    public ResponseEntity<Sessions> patchSession(
+            @PathVariable("id") Long id, 
+            @RequestBody Map<String, Object> updates) {
+
+        return sessionsRepository.findById(id)
+                .map(existingSession -> {
+                    updates.forEach((key, value) -> {
+                        switch (key) {
+                            case "deviceFingerprint":
+                                existingSession.setDeviceFingerprint((String) value);
+                                break;
+                            case "ipAddress":
+                                existingSession.setIpAddress((String) value);
+                                break;
+                            case "userAgent":
+                                existingSession.setUserAgent((String) value);
+                                break;
+                            case "isVpnProxy":
+                                if (value instanceof Boolean flag) {
+                                    existingSession.setIsVpnProxy(flag);
+                                }
+                                break;
+                            case "asnDatacenterFlag":
+                                if (value instanceof Boolean flag) {
+                                    existingSession.setAsnDatacenterFlag(flag);
+                                }
+                                break;
+                            case "geoCountry":
+                                existingSession.setGeoCountry((String) value);
+                                break;
+                        }
+                    });
+                    Sessions patchedSession = sessionsRepository.save(existingSession);
+                    return ResponseEntity.ok(patchedSession);
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/{id}")

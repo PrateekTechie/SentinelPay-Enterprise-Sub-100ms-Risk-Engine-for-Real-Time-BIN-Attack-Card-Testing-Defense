@@ -10,7 +10,7 @@ import com.example.demo.entity.PaymentMethods;
 public interface PaymentMethodRepository
         extends JpaRepository<PaymentMethods, String> {
 
-    List<PaymentMethods> findByUserId(UUID userId);
+    List<PaymentMethods> findByAccount_UserId(UUID userId);
 
     List<PaymentMethods> findByCardStatus(String cardStatus);
 

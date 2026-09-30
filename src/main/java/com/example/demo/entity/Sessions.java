@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -28,7 +29,7 @@ import jakarta.validation.constraints.NotNull;
         @Index(name = "idx_ip_address", columnList = "ip_address")
     }
 )
-@Schema(name = "Sessions", description = "This is model class of session, it contains property and getter-setter methods")
+@Schema(name = "Sessions", description = "Model class for user authentication sessions")
 public class Sessions {
 
     @Id
@@ -36,18 +37,10 @@ public class Sessions {
     @Column(name = "session_id")
     private Long sessionId;
 
-    // Many Sessions belong to One Account
+    // Owning side: Contains FK 'user_id' pointing to Accounts
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", insertable = false, updatable = false)
+    @JoinColumn(name = "user_id")
     private Accounts account;
-
-    @Column(name = "user_id")
-    private Long userId;
-
-    // Many Sessions belong to One Device
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "device_id")
-    private Devices device;
 
     @Column(name = "device_fingerprint")
     private String deviceFingerprint;
@@ -73,20 +66,19 @@ public class Sessions {
     @NotNull(message = "Created timestamp cannot be null")
     private LocalDateTime createdAt;
 
-    // One Session can have Many Transactions
-    @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Transactions> transactions = new ArrayList<>();
+    // Non-owning side: mappedBy refers to 'session' field in Transaction
+    @JsonIgnore
+    @OneToMany(mappedBy = "session", cascade = CascadeType.ALL)
+    private List<Transaction> transactions = new ArrayList<>();
 
     public Sessions() {
     }
 
-    public Sessions(Long sessionId, Long userId, Devices device, String deviceFingerprint, String ipAddress, 
-                    Boolean isVpnProxy, Boolean asnDatacenterFlag, 
-                    @NotEmpty String geoCountry, @NotEmpty String userAgent, 
-                    @NotNull LocalDateTime createdAt) {
+    public Sessions(Long sessionId, Accounts account, String deviceFingerprint, String ipAddress,
+                    Boolean isVpnProxy, Boolean asnDatacenterFlag, String geoCountry,
+                    String userAgent, LocalDateTime createdAt) {
         this.sessionId = sessionId;
-        this.userId = userId;
-        this.device = device;
+        this.account = account;
         this.deviceFingerprint = deviceFingerprint;
         this.ipAddress = ipAddress;
         this.isVpnProxy = isVpnProxy;
@@ -95,8 +87,6 @@ public class Sessions {
         this.userAgent = userAgent;
         this.createdAt = createdAt;
     }
-
-    // --- Getters & Setters ---
 
     public Long getSessionId() {
         return sessionId;
@@ -112,22 +102,6 @@ public class Sessions {
 
     public void setAccount(Accounts account) {
         this.account = account;
-    }
-
-    public Long getUserId() {
-        return userId;
-    }
-
-    public void setUserId(Long userId) {
-        this.userId = userId;
-    }
-
-    public Devices getDevice() {
-        return device;
-    }
-
-    public void setDevice(Devices device) {
-        this.device = device;
     }
 
     public String getDeviceFingerprint() {
@@ -186,30 +160,11 @@ public class Sessions {
         this.createdAt = createdAt;
     }
 
-    public List<Transactions> getTransactions() {
+    public List<Transaction> getTransactions() {
         return transactions;
     }
 
-    public void setTransactions(List<Transactions> transactions) {
+    public void setTransactions(List<Transaction> transactions) {
         this.transactions = transactions;
-    }
-
-    // Helper methods for bidirectional synchronization
-    public void addTransaction(Transactions transaction) {
-        transactions.add(transaction);
-        transaction.setSession(this);
-    }
-
-    public void removeTransaction(Transactions transaction) {
-        transactions.remove(transaction);
-        transaction.setSession(null);
-    }
-
-    @Override
-    public String toString() {
-        return "Sessions [sessionId=" + sessionId + ", userId=" + userId + ", deviceFingerprint=" 
-                + deviceFingerprint + ", ipAddress=" + ipAddress + ", isVpnProxy=" + isVpnProxy 
-                + ", asnDatacenterFlag=" + asnDatacenterFlag + ", geoCountry=" + geoCountry 
-                + ", userAgent=" + userAgent + ", createdAt=" + createdAt + "]";
     }
 }

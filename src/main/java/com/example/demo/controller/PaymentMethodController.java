@@ -1,21 +1,25 @@
 package com.example.demo.controller;
 
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.demo.entity.Accounts;
 import com.example.demo.entity.PaymentMethods;
+import com.example.demo.repository.AccountsRepository;
 import com.example.demo.repository.PaymentMethodRepository;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,110 +27,114 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/api/payment-methods")
-@Tag(name = "Payment Methods", description = "APIs for managing tokenized payment methods")
+@RequestMapping("/api/v1/payment-methods")
+@Tag(name = "Payment Methods Controller", description = "APIs for managing payment methods")
 public class PaymentMethodController {
 
-    private final PaymentMethodRepository repository;
+    private final PaymentMethodRepository paymentMethodRepository;
+    private final AccountsRepository accountsRepository;
 
-    public PaymentMethodController(
-            PaymentMethodRepository repository) {
-        this.repository = repository;
+    public PaymentMethodController(PaymentMethodRepository paymentMethodRepository, 
+                                   AccountsRepository accountsRepository) {
+        this.paymentMethodRepository = paymentMethodRepository;
+        this.accountsRepository = accountsRepository;
     }
 
-    // CREATE
-    @PostMapping
-    @Operation(summary = "Create payment method", description = "Stores a tokenized payment method")
-    public ResponseEntity<PaymentMethods> createPaymentMethod(
-            @Valid @RequestBody PaymentMethods paymentMethod) {
-
-        if (paymentMethod.getCreatedAt() == null) {
-            paymentMethod.setCreatedAt(LocalDateTime.now());
-        }
-
-        PaymentMethods savedPaymentMethod = repository.save(paymentMethod);
-
-        return new ResponseEntity<>(
-                savedPaymentMethod,
-                HttpStatus.CREATED);
-    }
-
-    // GET ALL
     @GetMapping
-    @Operation(summary = "Get all payment methods", description = "Returns all stored payment methods")
-    public ResponseEntity<List<PaymentMethods>> getAllPaymentMethods() {
-
-        return ResponseEntity.ok(
-                repository.findAll());
+    @Operation(summary = "Get all payment methods")
+    public List<PaymentMethods> getAllPaymentMethods() {
+        return paymentMethodRepository.findAll();
     }
 
-    // GET BY CARD TOKEN
     @GetMapping("/{cardToken}")
-    @Operation(summary = "Get payment method by card token", description = "Finds a payment method using its token")
-    public ResponseEntity<PaymentMethods> getPaymentMethod(
-            @PathVariable String cardToken) {
-
-        return repository.findById(cardToken)
+    @Operation(summary = "Get payment method by card token")
+    public ResponseEntity<PaymentMethods> getPaymentMethodByToken(@PathVariable("cardToken") String cardToken) {
+        return paymentMethodRepository.findById(cardToken)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // GET BY USER
-    @GetMapping("/user/{userId}")
-    @Operation(summary = "Get payment methods by user", description = "Returns payment methods belonging to a user")
-    public ResponseEntity<List<PaymentMethods>> getByUser(
-            @PathVariable UUID userId) {
-
-        return ResponseEntity.ok(
-                repository.findByUserId(userId));
+    @PostMapping
+    @Operation(summary = "Create a new payment method")
+    public ResponseEntity<?> createPaymentMethod(@Valid @RequestBody PaymentMethods paymentMethod, 
+                                                 @RequestParam("userId") UUID userId) {
+        return accountsRepository.findById(userId)
+                .map(account -> {
+                    paymentMethod.setAccount(account);
+                    PaymentMethods saved = paymentMethodRepository.save(paymentMethod);
+                    return new ResponseEntity<>(saved, HttpStatus.CREATED);
+                })
+                .orElseGet(() -> ResponseEntity.badRequest().build());
     }
 
-    // GET BY BIN
-    @GetMapping("/bin/{binNumber}")
-    @Operation(summary = "Get payment methods by BIN", description = "Returns payment methods associated with a BIN")
-    public ResponseEntity<List<PaymentMethods>> getByBin(
-            @PathVariable String binNumber) {
-
-        return ResponseEntity.ok(
-                repository.findByBinNumber(binNumber));
-    }
-
-    // UPDATE
     @PutMapping("/{cardToken}")
-    @Operation(summary = "Update payment method", description = "Updates an existing payment method")
-    public ResponseEntity<PaymentMethods> updatePaymentMethod(
-            @PathVariable String cardToken,
-            @Valid @RequestBody PaymentMethods paymentMethod) {
-
-        return repository.findById(cardToken)
+    @Operation(summary = "Update an existing payment method")
+    public ResponseEntity<PaymentMethods> updatePaymentMethod(@PathVariable("cardToken") String cardToken,
+                                                               @Valid @RequestBody PaymentMethods updatedData,
+                                                               @RequestParam(value = "userId", required = false) UUID userId) {
+        return paymentMethodRepository.findById(cardToken)
                 .map(existing -> {
+                    existing.setBinNumber(updatedData.getBinNumber());
+                    existing.setCardType(updatedData.getCardType());
+                    existing.setIssuerBank(updatedData.getIssuerBank());
+                    existing.setCardCountry(updatedData.getCardCountry());
+                    existing.setCardStatus(updatedData.getCardStatus());
 
-                    existing.setUserId(paymentMethod.getUserId());
-                    existing.setBinNumber(paymentMethod.getBinNumber());
-                    existing.setCardType(paymentMethod.getCardType());
-                    existing.setIssuerBank(paymentMethod.getIssuerBank());
-                    existing.setCardCountry(paymentMethod.getCardCountry());
-                    existing.setCardStatus(paymentMethod.getCardStatus());
+                    if (userId != null) {
+                        Accounts account = accountsRepository.findById(userId).orElse(null);
+                        existing.setAccount(account);
+                    }
 
-                    PaymentMethods updated = repository.save(existing);
-
-                    return ResponseEntity.ok(updated);
+                    PaymentMethods saved = paymentMethodRepository.save(existing);
+                    return ResponseEntity.ok(saved);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // DELETE
+    @PatchMapping("/{cardToken}")
+    @Operation(summary = "Partially update a payment method", description = "Updates specific fields such as cardStatus, issuerBank, or re-associates userId")
+    public ResponseEntity<PaymentMethods> patchPaymentMethod(@PathVariable("cardToken") String cardToken,
+                                                             @RequestBody Map<String, Object> updates,
+                                                             @RequestParam(value = "userId", required = false) UUID userId) {
+        return paymentMethodRepository.findById(cardToken)
+                .map(existing -> {
+                    updates.forEach((key, value) -> {
+                        switch (key) {
+                            case "binNumber":
+                                existing.setBinNumber((String) value);
+                                break;
+                            case "cardType":
+                                existing.setCardType((String) value);
+                                break;
+                            case "issuerBank":
+                                existing.setIssuerBank((String) value);
+                                break;
+                            case "cardCountry":
+                                existing.setCardCountry((String) value);
+                                break;
+                            case "cardStatus":
+                                existing.setCardStatus((String) value);
+                                break;
+                        }
+                    });
+
+                    if (userId != null) {
+                        accountsRepository.findById(userId).ifPresent(existing::setAccount);
+                    }
+
+                    PaymentMethods saved = paymentMethodRepository.save(existing);
+                    return ResponseEntity.ok(saved);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @DeleteMapping("/{cardToken}")
-    @Operation(summary = "Delete payment method", description = "Deletes a payment method using its token")
-    public ResponseEntity<Void> deletePaymentMethod(
-            @PathVariable String cardToken) {
-
-        if (!repository.existsById(cardToken)) {
-            return ResponseEntity.notFound().build();
+    @Operation(summary = "Delete a payment method by card token")
+    public ResponseEntity<Void> deletePaymentMethod(@PathVariable("cardToken") String cardToken) {
+        if (paymentMethodRepository.existsById(cardToken)) {
+            paymentMethodRepository.deleteById(cardToken);
+            return ResponseEntity.noContent().build();
         }
-
-        repository.deleteById(cardToken);
-
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.notFound().build();
     }
 }
