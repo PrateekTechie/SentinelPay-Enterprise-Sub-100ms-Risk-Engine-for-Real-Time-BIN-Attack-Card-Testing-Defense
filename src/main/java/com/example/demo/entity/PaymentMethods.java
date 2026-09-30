@@ -1,160 +1,152 @@
 package com.example.demo.entity;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
 @Entity
 @Table(name = "payment_methods")
-@Schema(
-        name = "PaymentMethods",
-        description = "Payment method stored using a tokenized card identifier"
-)
+@Schema(name = "PaymentMethods", description = "Payment method stored using a tokenized card identifier")
 public class PaymentMethods {
 
     @Id
     @Column(name = "card_token", nullable = false, unique = true)
     @NotEmpty(message = "Card token cannot be empty")
-    private String card_token;
+    private String cardToken;
 
-    @Column(name = "user_id", nullable = false)
-    @NotNull(message = "User ID cannot be null")
-    private UUID user_id;
+    // Owning side: Contains FK 'user_id' pointing to Accounts
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private Accounts account;
 
     @Column(name = "bin_number", nullable = false)
     @NotEmpty(message = "BIN number cannot be empty")
-    private String bin_number;
+    private String binNumber;
 
     @Column(name = "card_type", nullable = false)
     @NotEmpty(message = "Card type cannot be empty")
-    private String card_type;
+    private String cardType;
 
     @Column(name = "issuer_bank", nullable = false)
     @NotEmpty(message = "Issuer bank cannot be empty")
-    private String issuer_bank;
+    private String issuerBank;
 
     @Column(name = "card_country", nullable = false)
     @NotEmpty(message = "Card country cannot be empty")
-    private String card_country;
+    private String cardCountry;
 
     @Column(name = "card_status", nullable = false)
     @NotEmpty(message = "Card status cannot be empty")
-    private String card_status;
+    private String cardStatus;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     @NotNull(message = "Created timestamp cannot be null")
-    private LocalDateTime created_at = LocalDateTime.now();
+    private LocalDateTime createdAt = LocalDateTime.now();
 
-    // Default constructor
+    // Non-owning side: mappedBy refers to 'paymentMethod' field in Transaction
+    @JsonIgnore
+    @OneToMany(mappedBy = "paymentMethod", cascade = CascadeType.ALL)
+    private List<Transaction> transactions = new ArrayList<>();
+
     public PaymentMethods() {
-        this.created_at = LocalDateTime.now();
+        this.createdAt = LocalDateTime.now();
     }
 
-    // Parameterized constructor
-    public PaymentMethods(
-            String card_token,
-            UUID user_id,
-            String bin_number,
-            String card_type,
-            String issuer_bank,
-            String card_country,
-            String card_status,
-            LocalDateTime created_at) {
-
-        this.card_token = card_token;
-        this.user_id = user_id;
-        this.bin_number = bin_number;
-        this.card_type = card_type;
-        this.issuer_bank = issuer_bank;
-        this.card_country = card_country;
-        this.card_status = card_status;
-        this.created_at = created_at != null
-                ? created_at
-                : LocalDateTime.now();
+    public PaymentMethods(String cardToken, Accounts account, String binNumber, String cardType,
+                          String issuerBank, String cardCountry, String cardStatus, LocalDateTime createdAt) {
+        this.cardToken = cardToken;
+        this.account = account;
+        this.binNumber = binNumber;
+        this.cardType = cardType;
+        this.issuerBank = issuerBank;
+        this.cardCountry = cardCountry;
+        this.cardStatus = cardStatus;
+        this.createdAt = createdAt != null ? createdAt : LocalDateTime.now();
     }
 
     public String getCardToken() {
-        return card_token;
+        return cardToken;
     }
 
-    public void setCardToken(String card_token) {
-        this.card_token = card_token;
+    public void setCardToken(String cardToken) {
+        this.cardToken = cardToken;
     }
 
-    public UUID getUserId() {
-        return user_id;
+    public Accounts getAccount() {
+        return account;
     }
 
-    public void setUserId(UUID user_id) {
-        this.user_id = user_id;
+    public void setAccount(Accounts account) {
+        this.account = account;
     }
 
     public String getBinNumber() {
-        return bin_number;
+        return binNumber;
     }
 
-    public void setBinNumber(String bin_number) {
-        this.bin_number = bin_number;
+    public void setBinNumber(String binNumber) {
+        this.binNumber = binNumber;
     }
 
     public String getCardType() {
-        return card_type;
+        return cardType;
     }
 
-    public void setCardType(String card_type) {
-        this.card_type = card_type;
+    public void setCardType(String cardType) {
+        this.cardType = cardType;
     }
 
     public String getIssuerBank() {
-        return issuer_bank;
+        return issuerBank;
     }
 
-    public void setIssuerBank(String issuer_bank) {
-        this.issuer_bank = issuer_bank;
+    public void setIssuerBank(String issuerBank) {
+        this.issuerBank = issuerBank;
     }
 
     public String getCardCountry() {
-        return card_country;
+        return cardCountry;
     }
 
-    public void setCardCountry(String card_country) {
-        this.card_country = card_country;
+    public void setCardCountry(String cardCountry) {
+        this.cardCountry = cardCountry;
     }
 
     public String getCardStatus() {
-        return card_status;
+        return cardStatus;
     }
 
-    public void setCardStatus(String card_status) {
-        this.card_status = card_status;
+    public void setCardStatus(String cardStatus) {
+        this.cardStatus = cardStatus;
     }
 
     public LocalDateTime getCreatedAt() {
-        return created_at;
+        return createdAt;
     }
 
-    public void setCreatedAt(LocalDateTime created_at) {
-        this.created_at = created_at;
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 
-    @Override
-    public String toString() {
-        return "PaymentMethods [" +
-                "card_token=" + card_token +
-                ", user_id=" + user_id +
-                ", bin_number=" + bin_number +
-                ", card_type=" + card_type +
-                ", issuer_bank=" + issuer_bank +
-                ", card_country=" + card_country +
-                ", card_status=" + card_status +
-                ", created_at=" + created_at +
-                "]";
+    public List<Transaction> getTransactions() {
+        return transactions;
+    }
+
+    public void setTransactions(List<Transaction> transactions) {
+        this.transactions = transactions;
     }
 }
