@@ -8,6 +8,8 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -40,6 +42,9 @@ import jakarta.validation.constraints.Size;
 @Tag(name = "Transactions Controller", description = "APIs for managing and evaluating financial transactions")
 public class TransactionController {
 
+    // 1. Initialize the Logger instance
+    private static final Logger logger = LoggerFactory.getLogger(TransactionController.class);
+
     private final TransactionRepository transactionRepository;
     private final PaymentMethodRepository paymentMethodRepository;
     private final SessionsRepository sessionsRepository;
@@ -55,14 +60,19 @@ public class TransactionController {
     @GetMapping
     @Operation(summary = "Get all transactions", description = "Retrieves a list of all recorded transactions")
     public ResponseEntity<List<Transaction>> getAllTransactions() {
+        logger.debug("Fetching all transaction records from database");
         return ResponseEntity.ok(transactionRepository.findAll());
     }
 
     @PostMapping
     @Operation(summary = "Ingest a new transaction", description = "Saves a new transaction payload into the risk engine database")
     public ResponseEntity<?> ingestTransaction(@Valid @RequestBody TransactionRequest request) {
+        logger.info("Ingesting new transaction request for merchant: {} with amount: {} {}", 
+                request.merchantId(), request.amount(), request.currency());
+
         PaymentMethods paymentMethod = paymentMethodRepository.findById(request.cardToken()).orElse(null);
         if (paymentMethod == null) {
+            logger.warn("Validation failed: No payment method found for cardToken: {}", request.cardToken());
             return ResponseEntity.badRequest().body("No payment method found for cardToken: " + request.cardToken());
         }
 
@@ -70,6 +80,7 @@ public class TransactionController {
         if (request.sessionId() != null) {
             session = sessionsRepository.findById(request.sessionId()).orElse(null);
             if (session == null) {
+                logger.warn("Validation failed: No session found for sessionId: {}", request.sessionId());
                 return ResponseEntity.badRequest().body("No session found for sessionId: " + request.sessionId());
             }
         }
@@ -82,22 +93,30 @@ public class TransactionController {
         transaction.setMerchantId(request.merchantId());
         transaction.setMccCode(request.mccCode());
         transaction.setTimestamp(request.timestamp() != null ? request.timestamp() : LocalDateTime.now());
+        
         Transaction savedTransaction = transactionRepository.save(transaction);
+        logger.info("Successfully saved transaction with ID: {}", savedTransaction.getTransactionId());
+        
         return new ResponseEntity<>(savedTransaction, HttpStatus.CREATED);
     }
 
     @GetMapping("/{transactionId}")
     @Operation(summary = "Get transaction by ID", description = "Retrieves specific transaction details by UUID")
     public ResponseEntity<Transaction> getTransactionById(@PathVariable("transactionId") UUID transactionId) {
+        logger.debug("Fetching transaction by ID: {}", transactionId);
         return transactionRepository.findById(transactionId)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseGet(() -> {
+                    logger.warn("Transaction not found with ID: {}", transactionId);
+                    return ResponseEntity.notFound().build();
+                });
     }
 
     @PutMapping("/{transactionId}")
     @Operation(summary = "Update full transaction details", description = "Replaces all existing attributes of a transaction")
     public ResponseEntity<Transaction> updateTransaction(@PathVariable("transactionId") UUID transactionId,
                                                          @Valid @RequestBody Transaction updatedTransaction) {
+        logger.info("Updating full transaction details for ID: {}", transactionId);
         return transactionRepository.findById(transactionId)
                 .map(existing -> {
                     existing.setAmount(updatedTransaction.getAmount());
@@ -107,15 +126,20 @@ public class TransactionController {
                     existing.setTimestamp(updatedTransaction.getTimestamp());
                     
                     Transaction saved = transactionRepository.save(existing);
+                    logger.info("Successfully updated transaction ID: {}", transactionId);
                     return ResponseEntity.ok(saved);
                 })
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseGet(() -> {
+                    logger.warn("Attempted to update non-existent transaction ID: {}", transactionId);
+                    return ResponseEntity.notFound().build();
+                });
     }
 
     @PatchMapping("/{transactionId}")
     @Operation(summary = "Partially update transaction", description = "Updates amount, currency, merchant, MCC, or timestamp")
     public ResponseEntity<Transaction> patchTransaction(@PathVariable("transactionId") UUID transactionId,
                                                         @RequestBody Map<String, Object> updates) {
+        logger.info("Applying partial updates (PATCH) to transaction ID: {}", transactionId);
         return transactionRepository.findById(transactionId)
                 .map(existing -> {
                     updates.forEach((key, value) -> {
@@ -143,18 +167,25 @@ public class TransactionController {
                     });
 
                     Transaction saved = transactionRepository.save(existing);
+                    logger.info("Successfully patched transaction ID: {}", transactionId);
                     return ResponseEntity.ok(saved);
                 })
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseGet(() -> {
+                    logger.warn("Attempted to patch non-existent transaction ID: {}", transactionId);
+                    return ResponseEntity.notFound().build();
+                });
     }
 
     @DeleteMapping("/{transactionId}")
     @Operation(summary = "Delete transaction by ID", description = "Deletes a transaction record permanently by UUID")
     public ResponseEntity<Void> deleteTransaction(@PathVariable("transactionId") UUID transactionId) {
+        logger.info("Deleting transaction record with ID: {}", transactionId);
         if (transactionRepository.existsById(transactionId)) {
             transactionRepository.deleteById(transactionId);
+            logger.info("Successfully deleted transaction ID: {}", transactionId);
             return ResponseEntity.noContent().build();
         }
+        logger.warn("Attempted to delete non-existent transaction ID: {}", transactionId);
         return ResponseEntity.notFound().build();
     }
 
